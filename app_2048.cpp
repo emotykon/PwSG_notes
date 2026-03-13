@@ -1,5 +1,7 @@
 ﻿#include "app_2048.h" 
 #include <stdexcept>
+#include <vector>
+#include <cmath>
 
 // ui definitions
 #define ID_MENU_NEWGAME 2001
@@ -7,7 +9,8 @@
 #define ID_MENU_ABOUT   2003
 #define ID_BUTTON_RESET 2004
 #define ID_EDIT_NAME    2005
-#define ID_TEST			2006
+#define ID_TEST         2006
+#define ID_TIMER_ANIM   3001
 
 std::wstring const app_2048::s_class_name{ L"2048 Window" };
 // class
@@ -35,7 +38,7 @@ HWND app_2048::create_window()
 		L"2048",
 		WS_OVERLAPPED | WS_SYSMENU | WS_CAPTION | WS_BORDER | WS_MINIMIZEBOX,
 		CW_USEDEFAULT, 0,
-		CW_USEDEFAULT, 0,
+		800, 800,
 		nullptr,
 		nullptr,
 		m_instance,
@@ -107,11 +110,24 @@ LRESULT app_2048::window_proc(
 			200, 200, 70, 30, window, (HMENU)ID_BUTTON_RESET,
 			(HINSTANCE)GetWindowLongPtr(window, GWLP_HINSTANCE), NULL);
 
+		for (int i = 0; i < 10; i++) {
+			HWND hDigit = CreateWindowW(L"BUTTON", std::to_wstring(i).c_str(),
+				WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+				0, 0, 40, 40, window, (HMENU)(5000 + i), m_instance, NULL);
+			m_digits.push_back(hDigit);
+		}
+		SetTimer(window, ID_TIMER_ANIM, 16, NULL);
+
 		return 0;
 	}
-	//
+				  //
 	case WM_COMMAND: {
 		int wmId = LOWORD(wparam);
+
+		if (wmId >= 5000 && wmId <= 5009) {
+			m_is_spinning = !m_is_spinning;
+			return 0;
+		}
 
 		switch (wmId) {
 		case ID_MENU_NEWGAME:
@@ -149,12 +165,54 @@ LRESULT app_2048::window_proc(
 		}
 		return 0;
 	}
-	//
+	case WM_MOUSEMOVE: {
+		m_mouseX = LOWORD(lparam);
+		m_mouseY = HIWORD(lparam);
+		return 0;
+	}
+	case WM_TIMER: {
+		if (wparam == ID_TIMER_ANIM) {
+			RECT rc;
+			GetClientRect(window, &rc);
+			int cx = (rc.right - rc.left) / 2;
+			int cy = (rc.bottom - rc.top) / 2;
+
+			if (m_is_spinning) {
+				m_angle += 0.05f;
+				for (int i = 0; i < 10; i++) {
+					float a = m_angle + (i * (2.0f * 3.14159f / 10.0f));
+					int x = cx + static_cast<int>(150 * cos(a)) - 20;
+					int y = cy + static_cast<int>(150 * sin(a)) - 20;
+					MoveWindow(m_digits[i], x, y, 40, 40, TRUE);
+				}
+			}
+			else {
+				for (int i = 0; i < 10; i++) {
+					int targetX = (i == 0) ? m_mouseX : m_lastX[i - 1];
+					int targetY = (i == 0) ? m_mouseY : m_lastY[i - 1];
+
+					RECT cur;
+					GetWindowRect(m_digits[i], &cur);
+					MapWindowPoints(HWND_DESKTOP, window, (LPPOINT)&cur, 2);
+
+					int newX = cur.left + static_cast<int>((targetX - cur.left) * 0.1f);
+					int newY = cur.top + static_cast<int>((targetY - cur.top) * 0.1f);
+
+					MoveWindow(m_digits[i], newX, newY, 40, 40, TRUE);
+					m_lastX[i] = newX;
+					m_lastY[i] = newY;
+				}
+			}
+		}
+		return 0;
+	}
+				 //
 	case WM_CLOSE:
 		DestroyWindow(window);
 		return 0;
 
 	case WM_DESTROY:
+		KillTimer(window, ID_TIMER_ANIM);
 		if (window == m_main)
 			PostQuitMessage(EXIT_SUCCESS);
 		return 0;
@@ -172,8 +230,9 @@ LRESULT app_2048::window_proc(
 
 // builder
 app_2048::app_2048(HINSTANCE instance)
-	: m_instance{ instance }, m_main{}
+	: m_instance{ instance }, m_main{}, m_angle{ 0 }, m_is_spinning{ true }, m_mouseX{ 0 }, m_mouseY{ 0 }
 {
+	for (int i = 0; i < 10; i++) { m_lastX[i] = 0; m_lastY[i] = 0; }
 	register_class();
 	m_main = create_window();
 }
