@@ -1,0 +1,24 @@
+h
+ID_COLOROPTION 1001
+COLORREF m_selected_color
+void create menu
+	draw window (Hwnd window)
+
+
+app
+#pragma comment(lib, "Msimg32.lib")
+
+konstruktor init m_s_c {rgb}
+create_menu
+
+create window
+.hbrBackground = nullptr,
+thickframe zamiast overlap
+
+fun create menu
+fun draw gradient
+
+Wm_paint
+draw_gradient
+Wm_size
+InvalidateRect(window, nullptr, TRUE);
